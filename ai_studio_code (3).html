@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Nifty25 Pro | Professional Trading Terminal</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Public+Sans:wght@300;400;500;600;700&display=swap');
+        
+        :root {
+            --bull-color: #00c805;
+            --bear-color: #ff3b30;
+            --brand-blue: #0052ff;
+        }
+
+        body {
+            font-family: 'Public Sans', sans-serif;
+            background-color: #0a0a0a;
+            color: #ffffff;
+            overflow-x: hidden;
+        }
+
+        .mono { font-family: 'JetBrains Mono', monospace; }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 4px; height: 4px; }
+        ::-webkit-scrollbar-track { background: #1a1a1a; }
+        ::-webkit-scrollbar-thumb { background: #333; border-radius: 10px; }
+
+        .stock-card {
+            transition: all 0.2s ease;
+            border: 1px solid #1f1f1f;
+        }
+        .stock-card:hover { border-color: #3b82f6; background: #161616; }
+
+        .order-modal {
+            transform: translateY(100%);
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .order-modal.active { transform: translateY(0); }
+
+        .price-up { color: var(--bull-color); animation: pulse-green 0.5s; }
+        .price-down { color: var(--bear-color); animation: pulse-red 0.5s; }
+
+        @keyframes pulse-green {
+            0% { background: rgba(0, 200, 5, 0.2); }
+            100% { background: transparent; }
+        }
+        @keyframes pulse-red {
+            0% { background: rgba(255, 59, 48, 0.2); }
+            100% { background: transparent; }
+        }
+
+        .tab-active {
+            border-bottom: 2px solid var(--brand-blue);
+            color: var(--brand-blue);
+        }
+
+        .blurred-bg {
+            backdrop-filter: blur(12px);
+            background: rgba(10, 10, 10, 0.8);
+        }
+    </style>
+</head>
+<body class="pb-24">
+
+    <!-- Header -->
+    <header class="sticky top-0 z-50 blurred-bg border-b border-white/10 px-4 py-3">
+        <div class="max-w-7xl mx-auto flex justify-between items-center">
+            <div class="flex items-center gap-3">
+                <div class="bg-blue-600 w-8 h-8 rounded-lg flex items-center justify-center">
+                    <i class="fas fa-bolt text-white"></i>
+                </div>
+                <div>
+                    <h1 class="font-bold text-lg tracking-tight">Nifty25 <span class="text-blue-500">Pro</span></h1>
+                    <p class="text-[10px] text-gray-500 font-bold uppercase mono">Market Live • Feb 12, 2026</p>
+                </div>
+            </div>
+            <div class="text-right">
+                <p class="text-[10px] text-gray-400 font-bold uppercase">Available Margin</p>
+                <p class="text-lg font-bold mono text-green-400" id="wallet-balance">₹10,00,000.00</p>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Tabs -->
+    <div class="flex border-b border-white/10 mb-4 sticky top-[65px] z-40 blurred-bg">
+        <button onclick="switchTab('market')" id="tab-market" class="flex-1 py-4 text-sm font-bold tab-active uppercase tracking-wider">Market</button>
+        <button onclick="switchTab('portfolio')" id="tab-portfolio" class="flex-1 py-4 text-sm font-bold text-gray-500 uppercase tracking-wider">Portfolio <span id="pos-count" class="ml-1 bg-white/10 px-1.5 rounded text-[10px]">0</span></button>
+        <button onclick="switchTab('history')" id="tab-history" class="flex-1 py-4 text-sm font-bold text-gray-500 uppercase tracking-wider">History</button>
+    </div>
+
+    <!-- Market Section -->
+    <main id="view-market" class="max-w-7xl mx-auto p-4 space-y-4">
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3" id="market-list">
+            <!-- Stocks injected here -->
+        </div>
+    </main>
+
+    <!-- Portfolio Section -->
+    <main id="view-portfolio" class="hidden max-w-7xl mx-auto p-4 space-y-4">
+        <div id="portfolio-empty" class="text-center py-20 text-gray-600">
+            <i class="fas fa-box-open text-5xl mb-4"></i>
+            <p>No active positions</p>
+        </div>
+        <div id="positions-list" class="space-y-4"></div>
+    </main>
+
+    <!-- History Section -->
+    <main id="view-history" class="hidden max-w-7xl mx-auto p-4">
+        <div class="flex justify-between items-center mb-6">
+            <h3 class="font-bold">Transaction Logs</h3>
+            <button onclick="downloadCSV()" class="bg-blue-600 px-4 py-2 rounded-lg text-xs font-bold">
+                <i class="fas fa-download mr-2"></i> EXPORT CSV
+            </button>
+        </div>
+        <div class="bg-[#161616] rounded-xl overflow-hidden border border-white/5">
+            <table class="w-full text-left text-xs">
+                <thead class="bg-white/5 text-gray-400">
+                    <tr>
+                        <th class="p-4">TIME</th>
+                        <th class="p-4">STOCK</th>
+                        <th class="p-4">TYPE</th>
+                        <th class="p-4">QTY</th>
+                        <th class="p-4">PRICE</th>
+                        <th class="p-4">TOTAL</th>
+                    </tr>
+                </thead>
+                <tbody id="history-table-body"></tbody>
+            </table>
+        </div>
+    </main>
+
+    <!-- Order Modal (Buy/Sell) -->
+    <div id="modal-overlay" class="fixed inset-0 bg-black/80 z-[60] hidden" onclick="closeOrderModal()"></div>
+    <div id="order-modal" class="fixed bottom-0 left-0 right-0 bg-[#161616] z-[70] order-modal rounded-t-[32px] max-w-2xl mx-auto border-t border-white/10 overflow-hidden">
+        <div id="modal-header-bg" class="p-6 transition-colors duration-500">
+            <div class="flex justify-between items-start mb-4">
+                <div>
+                    <span id="order-type-tag" class="px-3 py-1 rounded-full text-[10px] font-black uppercase mb-2 inline-block">BUY</span>
+                    <h2 id="order-stock-name" class="text-2xl font-bold tracking-tight">HDFC Bank</h2>
+                    <p class="text-white/60 text-sm mono" id="order-stock-symbol">HDFCBANK • NSE</p>
+                </div>
+                <div class="text-right">
+                    <p class="text-[10px] font-bold text-white/40 uppercase">Market Price</p>
+                    <p id="order-live-price" class="text-xl font-bold mono">₹1,678.45</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="p-6 space-y-6 bg-[#161616]">
+            <!-- Quantity and Price Inputs -->
+            <div class="grid grid-cols-2 gap-4">
+                <div class="space-y-2">
+                    <label class="text-[10px] font-bold text-gray-500 uppercase">Quantity</label>
+                    <input type="number" id="order-qty" value="1" min="1" oninput="calculateTotal()" class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-4 text-lg font-bold mono focus:border-blue-500 outline-none">
+                </div>
+                <div class="space-y-2">
+                    <label class="text-[10px] font-bold text-gray-500 uppercase">Order Type</label>
+                    <div class="flex bg-white/5 p-1 rounded-xl border border-white/10">
+                        <button class="flex-1 py-3 text-xs font-bold bg-white/10 rounded-lg">MARKET</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Risk Management -->
+            <div class="grid grid-cols-2 gap-4">
+                <div class="space-y-2">
+                    <label class="text-[10px] font-bold text-red-500 uppercase">Stop Loss</label>
+                    <input type="number" id="order-sl" class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm font-bold mono focus:border-red-500/50 outline-none">
+                </div>
+                <div class="space-y-2">
+                    <label class="text-[10px] font-bold text-green-500 uppercase">Target</label>
+                    <input type="number" id="order-target" class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm font-bold mono focus:border-green-500/50 outline-none">
+                </div>
+            </div>
+
+            <!-- Summary -->
+            <div class="bg-black/40 rounded-2xl p-4 flex justify-between items-center border border-white/5">
+                <div>
+                    <p class="text-[10px] text-gray-500 font-bold uppercase">Estimated Total</p>
+                    <p id="order-total" class="text-lg font-bold mono">₹0.00</p>
+                </div>
+                <button id="execute-btn" onclick="executeOrder()" class="px-8 py-4 rounded-xl font-bold text-sm tracking-widest shadow-xl transition-transform active:scale-95">
+                    EXECUTE ORDER
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 1. DATA INITIALIZATION
+        const STOCKS_DATA = [
+            { id: 1, symbol: "HDFCBANK", name: "HDFC Bank", currentPrice: 1678.45, change: 1.40, logo: "🏦", sector: "Banking" },
+            { id: 2, symbol: "ICICIBANK", name: "ICICI Bank", currentPrice: 1089.70, change: 1.61, logo: "🏛️", sector: "Banking" },
+            { id: 3, symbol: "SBIN", name: "SBI", currentPrice: 789.35, change: 1.77, logo: "🏧", sector: "Banking" },
+            { id: 4, symbol: "AXISBANK", name: "Axis Bank", currentPrice: 1098.50, change: 1.22, logo: "💳", sector: "Banking" },
+            { id: 5, symbol: "KOTAKBANK", name: "Kotak Bank", currentPrice: 1756.80, change: 1.41, logo: "🏪", sector: "Banking" },
+            { id: 6, symbol: "TCS", name: "TCS", currentPrice: 3892.65, change: 1.23, logo: "💻", sector: "IT" },
+            { id: 7, symbol: "INFY", name: "Infosys", currentPrice: 1567.40, change: 1.53, logo: "🖥️", sector: "IT" },
+            { id: 8, symbol: "WIPRO", name: "Wipro", currentPrice: 298.75, change: 1.82, logo: "⚙️", sector: "IT" },
+            { id: 9, symbol: "HCLTECH", name: "HCL Tech", currentPrice: 1423.90, change: 1.30, logo: "📱", sector: "IT" },
+            { id: 10, symbol: "TECHM", name: "Tech Mahindra", currentPrice: 1598.25, change: 1.62, logo: "🔧", sector: "IT" },
+            { id: 11, symbol: "RELIANCE", name: "Reliance", currentPrice: 2456.80, change: 1.88, logo: "⛽", sector: "Energy" },
+            { id: 12, symbol: "ONGC", name: "ONGC", currentPrice: 267.35, change: 2.12, logo: "🛢️", sector: "Energy" },
+            { id: 13, symbol: "NTPC", name: "NTPC", currentPrice: 378.90, change: 2.01, logo: "⚡", sector: "Energy" },
+            { id: 14, symbol: "MARUTI", name: "Maruti Suzuki", currentPrice: 10789.50, change: 1.35, logo: "🚗", sector: "Auto" },
+            { id: 15, symbol: "TATAMOTORS", name: "Tata Motors", currentPrice: 895.40, change: 1.88, logo: "🚙", sector: "Auto" },
+            { id: 16, symbol: "M&M", name: "Mahindra & Mahindra", currentPrice: 2987.65, change: 1.82, logo: "🏎️", sector: "Auto" },
+            { id: 17, symbol: "HINDUNILVR", name: "HUL", currentPrice: 2234.80, change: 1.66, logo: "🧴", sector: "FMCG" },
+            { id: 18, symbol: "ITC", name: "ITC", currentPrice: 456.90, change: 1.93, logo: "🚬", sector: "FMCG" },
+            { id: 19, symbol: "NESTLEIND", name: "Nestle India", currentPrice: 2189.45, change: 1.61, logo: "☕", sector: "FMCG" },
+            { id: 20, symbol: "TATASTEEL", name: "Tata Steel", currentPrice: 167.45, change: 2.23, logo: "🔩", sector: "Metals" },
+            { id: 21, symbol: "HINDALCO", name: "Hindalco", currentPrice: 678.90, change: 2.33, logo: "🏭", sector: "Metals" },
+            { id: 22, symbol: "SUNPHARMA", name: "Sun Pharma", currentPrice: 1789.35, change: 1.73, logo: "💊", sector: "Pharma" },
+            { id: 23, symbol: "DRREDDY", name: "Dr. Reddy's", currentPrice: 1234.70, change: 1.85, logo: "🧬", sector: "Pharma" },
+            { id: 24, symbol: "LT", name: "L&T", currentPrice: 3456.90, change: 1.72, logo: "🏗️", sector: "Infra" },
+            { id: 25, symbol: "BAJFINANCE", name: "Bajaj Finance", currentPrice: 7123.45, change: 1.94, logo: "💰", sector: "Finance" }
+        ];
+
+        let state = {
+            balance: 1000000.00,
+            positions: [],
+            history: [],
+            activeOrder: null
+        };
+
+        // 2. CORE ENGINES
+        function init() {
+            renderMarket();
+            startPriceSimulation();
+            updateHoldTimers();
+        }
+
+        function startPriceSimulation() {
+            setInterval(() => {
+                STOCKS_DATA.forEach(stock => {
+                    const movement = (Math.random() - 0.5) * (stock.currentPrice * 0.002);
+                    const oldPrice = stock.currentPrice;
+                    stock.currentPrice += movement;
+                    
+                    const el = document.getElementById(`price-${stock.symbol}`);
+                    if (el) {
+                        el.textContent = `₹${stock.currentPrice.toLocaleString('en-IN', {minimumFractionDigits: 2})}`;
+                        el.className = `text-sm font-bold mono ${movement > 0 ? 'price-up' : 'price-down'}`;
+                    }
+                });
+                if (state.positions.length > 0) renderPortfolio();
+                if (state.activeOrder) updateOrderModalPrice();
+            }, 2000);
+        }
+
+        // 3. UI RENDERING
+        function renderMarket() {
+            const list = document.getElementById('market-list');
+            list.innerHTML = STOCKS_DATA.map(stock => `
+                <div class="stock-card p-4 rounded-2xl flex justify-between items-center cursor-pointer" onclick="openOrderModal('${stock.symbol}', 'BUY')">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center text-xl">${stock.logo}</div>
+                        <div>
+                            <h4 class="font-bold text-sm">${stock.symbol}</h4>
+                            <p class="text-[10px] text-gray-500 font-bold uppercase">${stock.sector}</p>
+                        </div>
+                    </div>
+                    <div class="text-right">
+                        <p id="price-${stock.symbol}" class="text-sm font-bold mono">₹${stock.currentPrice.toFixed(2)}</p>
+                        <p class="text-[10px] text-green-500 font-bold">+${stock.change}%</p>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function renderPortfolio() {
+            const list = document.getElementById('positions-list');
+            const empty = document.getElementById('portfolio-empty');
+            
+            if (state.positions.length === 0) {
+                list.innerHTML = '';
+                empty.classList.remove('hidden');
+                return;
+            }
+
+            empty.classList.add('hidden');
+            document.getElementById('pos-count').textContent = state.positions.length;
+
+            list.innerHTML = state.positions.map((pos, idx) => {
+                const stock = STOCKS_DATA.find(s => s.symbol === pos.symbol);
+                const pnl = (stock.currentPrice - pos.entryPrice) * pos.qty;
+                const isProfit = pnl >= 0;
+
+                return `
+                    <div class="bg-[#161616] p-5 rounded-2xl border border-white/5 space-y-4">
+                        <div class="flex justify-between items-start">
+                            <div class="flex items-center gap-3">
+                                <div class="text-2xl">${stock.logo}</div>
+                                <div>
+                                    <h4 class="font-bold">${pos.symbol}</h4>
+                                    <p class="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Entry: ₹${pos.entryPrice.toFixed(2)}</p>
+                                </div>
+                            </div>
+                            <div class="text-right">
+                                <p class="text-lg font-bold mono ${isProfit ? 'text-green-500' : 'text-red-500'}">
+                                    ${isProfit ? '+' : ''}₹${pnl.toFixed(2)}
+                                </p>
+                                <p class="text-[10px] font-bold ${isProfit ? 'text-green-800 bg-green-500/10' : 'text-red-800 bg-red-500/10'} px-2 py-0.5 rounded inline-block">
+                                    ${((pnl / (pos.entryPrice * pos.qty)) * 100).toFixed(2)}%
+                                </p>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-3 gap-2 py-3 border-y border-white/5">
+                            <div><p class="text-[9px] text-gray-500 font-bold uppercase">Qty</p><p class="text-xs font-bold mono">${pos.qty}</p></div>
+                            <div><p class="text-[9px] text-gray-500 font-bold uppercase text-center">SL</p><p class="text-xs font-bold mono text-center text-red-400">₹${pos.sl}</p></div>
+                            <div><p class="text-[9px] text-gray-500 font-bold uppercase text-right">Target</p><p class="text-xs font-bold mono text-right text-green-400">₹${pos.target}</p></div>
+                        </div>
+                        <div class="flex gap-2">
+                            <button onclick="squareOff(${idx})" class="flex-1 py-3 bg-white/5 hover:bg-white/10 text-white text-[10px] font-bold rounded-xl uppercase tracking-widest transition">Square Off</button>
+                            <button onclick="openOrderModal('${pos.symbol}', 'BUY', true, ${idx})" class="flex-1 py-3 bg-blue-600/10 hover:bg-blue-600/20 text-blue-500 text-[10px] font-bold rounded-xl uppercase tracking-widest transition">Modify</button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // 4. ORDER MANAGEMENT
+        function openOrderModal(symbol, type, isModify = false, posIdx = null) {
+            const stock = STOCKS_DATA.find(s => s.symbol === symbol);
+            state.activeOrder = { ...stock, type, isModify, posIdx };
+            
+            const modal = document.getElementById('order-modal');
+            const overlay = document.getElementById('modal-overlay');
+            const header = document.getElementById('modal-header-bg');
+            const btn = document.getElementById('execute-btn');
+            const typeTag = document.getElementById('order-type-tag');
+
+            document.getElementById('order-stock-name').textContent = stock.name;
+            document.getElementById('order-stock-symbol').textContent = `${stock.symbol} • NSE`;
+            document.getElementById('order-live-price').textContent = `₹${stock.currentPrice.toFixed(2)}`;
+            
+            if (isModify) {
+                const pos = state.positions[posIdx];
+                document.getElementById('order-qty').value = pos.qty;
+                document.getElementById('order-sl').value = pos.sl;
+                document.getElementById('order-target').value = pos.target;
+                btn.textContent = "UPDATE POSITION";
+            } else {
+                document.getElementById('order-qty').value = 1;
+                document.getElementById('order-sl').value = (stock.currentPrice * 0.98).toFixed(2);
+                document.getElementById('order-target').value = (stock.currentPrice * 1.04).toFixed(2);
+                btn.textContent = "PLACE BUY ORDER";
+            }
+
+            header.className = `p-6 transition-colors duration-500 ${type === 'BUY' ? 'bg-green-600/20' : 'bg-red-600/20'}`;
+            btn.className = `px-8 py-4 rounded-xl font-bold text-sm tracking-widest shadow-xl transition-transform active:scale-95 ${type === 'BUY' ? 'bg-green-600 shadow-green-900/20' : 'bg-red-600 shadow-red-900/20'}`;
+            typeTag.className = `px-3 py-1 rounded-full text-[10px] font-black uppercase mb-2 inline-block ${type === 'BUY' ? 'bg-green-500 text-black' : 'bg-red-500 text-black'}`;
+            typeTag.textContent = type;
+
+            calculateTotal();
+            overlay.classList.remove('hidden');
+            modal.classList.add('active');
+        }
+
+        function closeOrderModal() {
+            document.getElementById('order-modal').classList.remove('active');
+            document.getElementById('modal-overlay').classList.add('hidden');
+            state.activeOrder = null;
+        }
+
+        function calculateTotal() {
+            const qty = document.getElementById('order-qty').value;
+            const price = state.activeOrder.currentPrice;
+            document.getElementById('order-total').textContent = `₹${(qty * price).toLocaleString('en-IN', {minimumFractionDigits: 2})}`;
+        }
+
+        function executeOrder() {
+            const qty = parseInt(document.getElementById('order-qty').value);
+            const sl = parseFloat(document.getElementById('order-sl').value);
+            const target = parseFloat(document.getElementById('order-target').value);
+            const total = qty * state.activeOrder.currentPrice;
+
+            if (total > state.balance && !state.activeOrder.isModify) {
+                alert("Insufficient Margin!");
+                return;
+            }
+
+            if (state.activeOrder.isModify) {
+                const pos = state.positions[state.activeOrder.posIdx];
+                pos.qty = qty;
+                pos.sl = sl;
+                pos.target = target;
+            } else {
+                state.balance -= total;
+                state.positions.push({
+                    symbol: state.activeOrder.symbol,
+                    entryPrice: state.activeOrder.currentPrice,
+                    qty, sl, target,
+                    time: new Date()
+                });
+                state.history.push({
+                    time: new Date().toLocaleTimeString(),
+                    symbol: state.activeOrder.symbol,
+                    type: 'BUY',
+                    qty,
+                    price: state.activeOrder.currentPrice,
+                    total
+                });
+            }
+
+            updateGlobalUI();
+            closeOrderModal();
+            renderHistory();
+        }
+
+        function squareOff(idx) {
+            const pos = state.positions[idx];
+            const stock = STOCKS_DATA.find(s => s.symbol === pos.symbol);
+            const total = pos.qty * stock.currentPrice;
+            
+            state.balance += total;
+            state.history.push({
+                time: new Date().toLocaleTimeString(),
+                symbol: pos.symbol,
+                type: 'SELL',
+                qty: pos.qty,
+                price: stock.currentPrice,
+                total
+            });
+            
+            state.positions.splice(idx, 1);
+            updateGlobalUI();
+            renderHistory();
+        }
+
+        function updateGlobalUI() {
+            document.getElementById('wallet-balance').textContent = `₹${state.balance.toLocaleString('en-IN', {minimumFractionDigits: 2})}`;
+            document.getElementById('pos-count').textContent = state.positions.length;
+            renderPortfolio();
+        }
+
+        function switchTab(tab) {
+            ['market', 'portfolio', 'history'].forEach(t => {
+                document.getElementById(`view-${t}`).classList.add('hidden');
+                document.getElementById(`tab-${t}`).classList.remove('tab-active', 'text-blue-500');
+                document.getElementById(`tab-${t}`).classList.add('text-gray-500');
+            });
+            document.getElementById(`view-${tab}`).classList.remove('hidden');
+            document.getElementById(`tab-${tab}`).classList.add('tab-active', 'text-blue-500');
+        }
+
+        function renderHistory() {
+            const body = document.getElementById('history-table-body');
+            body.innerHTML = state.history.slice().reverse().map(h => `
+                <tr class="border-b border-white/5">
+                    <td class="p-4 mono text-gray-500">${h.time}</td>
+                    <td class="p-4 font-bold">${h.symbol}</td>
+                    <td class="p-4"><span class="px-2 py-0.5 rounded text-[10px] font-bold ${h.type === 'BUY' ? 'bg-green-500/10 text-green-500' : 'bg-red-500/10 text-red-500'}">${h.type}</span></td>
+                    <td class="p-4 mono">${h.qty}</td>
+                    <td class="p-4 mono">₹${h.price.toFixed(2)}</td>
+                    <td class="p-4 mono font-bold">₹${h.total.toFixed(2)}</td>
+                </tr>
+            `).join('');
+        }
+
+        function downloadCSV() {
+            let csv = "Time,Symbol,Type,Qty,Price,Total\n";
+            state.history.forEach(h => {
+                csv += `${h.time},${h.symbol},${h.type},${h.qty},${h.price},${h.total}\n`;
+            });
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `trade_history_${new Date().getTime()}.csv`;
+            a.click();
+        }
+
+        window.onload = init;
+    </script>
+</body>
+</html>
