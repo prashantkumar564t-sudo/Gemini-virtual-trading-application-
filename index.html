@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Nifty25 Pro | Professional Trading Terminal</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Public+Sans:wght@300;400;500;600;700&display=swap');
+        :root { --bull-color: #00c805; --bear-color: #ff3b30; --brand-blue: #0052ff; }
+        body { font-family: 'Public Sans', sans-serif; background-color: #0a0a0a; color: #ffffff; overflow-x: hidden; }
+        .mono { font-family: 'JetBrains Mono', monospace; }
+        .stock-card { transition: all 0.2s ease; border: 1px solid #1f1f1f; }
+        .stock-card:hover { border-color: #3b82f6; background: #161616; }
+        .order-modal { transform: translateY(100%); transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+        .order-modal.active { transform: translateY(0); }
+        .price-up { color: var(--bull-color); animation: pulse-green 0.5s; }
+        .price-down { color: var(--bear-color); animation: pulse-red 0.5s; }
+        @keyframes pulse-green { 0% { background: rgba(0, 200, 5, 0.2); } 100% { background: transparent; } }
+        @keyframes pulse-red { 0% { background: rgba(255, 59, 48, 0.2); } 100% { background: transparent; } }
+        .tab-active { border-bottom: 2px solid var(--brand-blue); color: var(--brand-blue); }
+        .blurred-bg { backdrop-filter: blur(12px); background: rgba(10, 10, 10, 0.8); }
+    </style>
+</head>
+<body class="pb-24">
+    <header class="sticky top-0 z-50 blurred-bg border-b border-white/10 px-4 py-3">
+        <div class="max-w-7xl mx-auto flex justify-between items-center">
+            <div class="flex items-center gap-3">
+                <div class="bg-blue-600 w-8 h-8 rounded-lg flex items-center justify-center"><i class="fas fa-bolt text-white"></i></div>
+                <div>
+                    <h1 class="font-bold text-lg tracking-tight">Nifty25 <span class="text-blue-500">Pro</span></h1>
+                    <p class="text-[10px] text-gray-500 font-bold uppercase mono">Live Terminal • 2026</p>
+                </div>
+            </div>
+            <div class="text-right">
+                <p class="text-[10px] text-gray-400 font-bold uppercase">Margin</p>
+                <p class="text-lg font-bold mono text-green-400" id="wallet-balance">₹10,00,000.00</p>
+            </div>
+        </div>
+    </header>
+
+    <nav class="flex border-b border-white/10 mb-4 sticky top-[65px] z-40 blurred-bg">
+        <button onclick="switchTab('market')" id="tab-market" class="flex-1 py-4 text-sm font-bold tab-active uppercase">Market</button>
+        <button onclick="switchTab('portfolio')" id="tab-portfolio" class="flex-1 py-4 text-sm font-bold text-gray-500 uppercase">Portfolio <span id="pos-count" class="ml-1 bg-white/10 px-1.5 rounded text-[10px]">0</span></button>
+        <button onclick="switchTab('history')" id="tab-history" class="flex-1 py-4 text-sm font-bold text-gray-500 uppercase">History</button>
+    </nav>
+
+    <main id="view-market" class="max-w-7xl mx-auto p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3"></main>
+    <main id="view-portfolio" class="hidden max-w-7xl mx-auto p-4 space-y-4"></main>
+    <main id="view-history" class="hidden max-w-7xl mx-auto p-4"></main>
+
+    <div id="modal-overlay" class="fixed inset-0 bg-black/80 z-[60] hidden" onclick="closeOrderModal()"></div>
+    <div id="order-modal" class="fixed bottom-0 left-0 right-0 bg-[#161616] z-[70] order-modal rounded-t-[32px] max-w-2xl mx-auto border-t border-white/10 overflow-hidden">
+        <div class="p-6 bg-green-600/10">
+            <h2 id="order-stock-name" class="text-2xl font-bold">Stock</h2>
+            <p id="order-live-price" class="text-xl font-bold mono text-blue-400">₹0.00</p>
+        </div>
+        <div class="p-6 space-y-6">
+            <input type="number" id="order-qty" value="1" min="1" oninput="calculateTotal()" class="w-full bg-white/5 border border-white/10 rounded-xl p-4 text-xl font-bold mono outline-none">
+            <div class="flex justify-between items-center bg-black/40 p-4 rounded-xl">
+                <div><p class="text-[10px] text-gray-500 uppercase">Total</p><p id="order-total" class="text-lg font-bold mono">₹0.00</p></div>
+                <button onclick="executeOrder()" class="bg-blue-600 px-8 py-4 rounded-xl font-bold text-sm">EXECUTE</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Data & State
+        const STOCKS = [
+            { id: 1, symbol: "HDFCBANK", name: "HDFC Bank", price: 1678.45, logo: "🏦" },
+            { id: 6, symbol: "TCS", name: "TCS", price: 3892.65, logo: "💻" },
+            { id: 11, symbol: "RELIANCE", name: "Reliance", price: 2456.80, logo: "⛽" },
+            { id: 15, symbol: "TATAMOTORS", name: "Tata Motors", price: 895.40, logo: "🚙" }
+        ];
+
+        let state = JSON.parse(localStorage.getItem('niftyState')) || {
+            balance: 1000000.00,
+            positions: [],
+            history: []
+        };
+
+        function save() { localStorage.setItem('niftyState', JSON.stringify(state)); }
+
+        // Logic
+        function init() {
+            renderMarket();
+            updateUI();
+            setInterval(() => {
+                STOCKS.forEach(s => {
+                    s.price += (Math.random() - 0.5) * 2;
+                    const el = document.getElementById(`price-${s.symbol}`);
+                    if(el) el.textContent = `₹${s.price.toFixed(2)}`;
+                });
+                renderPortfolio();
+            }, 2000);
+        }
+
+        function renderMarket() {
+            document.getElementById('view-market').innerHTML = STOCKS.map(s => `
+                <div class="stock-card p-4 rounded-2xl flex justify-between items-center cursor-pointer" onclick="openOrderModal('${s.symbol}')">
+                    <div class="flex items-center gap-3">
+                        <div class="text-2xl">${s.logo}</div>
+                        <h4 class="font-bold">${s.symbol}</h4>
+                    </div>
+                    <p id="price-${s.symbol}" class="font-bold mono">₹${s.price.toFixed(2)}</p>
+                </div>
+            `).join('');
+        }
+
+        function openOrderModal(symbol) {
+            const stock = STOCKS.find(s => s.symbol === symbol);
+            state.active = stock;
+            document.getElementById('order-stock-name').textContent = stock.name;
+            document.getElementById('order-live-price').textContent = `₹${stock.price.toFixed(2)}`;
+            calculateTotal();
+            document.getElementById('modal-overlay').classList.remove('hidden');
+            document.getElementById('order-modal').classList.add('active');
+        }
+
+        function calculateTotal() {
+            const qty = document.getElementById('order-qty').value;
+            document.getElementById('order-total').textContent = `₹${(qty * state.active.price).toFixed(2)}`;
+        }
+
+        function executeOrder() {
+            const qty = parseInt(document.getElementById('order-qty').value);
+            const total = qty * state.active.price;
+            if(total > state.balance) return alert("No Funds!");
+
+            state.balance -= total;
+            state.positions.push({ symbol: state.active.symbol, entry: state.active.price, qty });
+            state.history.push({ time: new Date().toLocaleTimeString(), symbol: state.active.symbol, type: 'BUY', total });
+            
+            save();
+            updateUI();
+            closeOrderModal();
+        }
+
+        function squareOff(idx) {
+            const pos = state.positions[idx];
+            const stock = STOCKS.find(s => s.symbol === pos.symbol);
+            state.balance += (pos.qty * stock.price);
+            state.history.push({ time: new Date().toLocaleTimeString(), symbol: pos.symbol, type: 'SELL', total: pos.qty * stock.price });
+            state.positions.splice(idx, 1);
+            save();
+            updateUI();
+        }
+
+        function updateUI() {
+            document.getElementById('wallet-balance').textContent = `₹${state.balance.toLocaleString('en-IN')}`;
+            document.getElementById('pos-count').textContent = state.positions.length;
+            renderPortfolio();
+            renderHistory();
+        }
+
+        function renderPortfolio() {
+            const list = document.getElementById('view-portfolio');
+            list.innerHTML = state.positions.length ? state.positions.map((p, i) => {
+                const s = STOCKS.find(x => x.symbol === p.symbol);
+                const pnl = (s.price - p.entry) * p.qty;
+                return `<div class="bg-[#161616] p-4 rounded-xl flex justify-between items-center border border-white/5">
+                    <div><h4 class="font-bold">${p.symbol}</h4><p class="text-xs text-gray-500">Qty: ${p.qty}</p></div>
+                    <div class="text-right"><p class="mono font-bold ${pnl>=0?'text-green-500':'text-red-500'}">₹${pnl.toFixed(2)}</p>
+                    <button onclick="squareOff(${i})" class="text-[10px] text-red-500 mt-1">EXIT</button></div></div>`;
+            }).join('') : `<p class="text-center text-gray-600">No Positions</p>`;
+        }
+
+        function renderHistory() {
+            document.getElementById('view-history').innerHTML = `<table class="w-full text-xs">
+                ${state.history.map(h => `<tr class="border-b border-white/5"><td class="p-3 text-gray-500">${h.time}</td><td class="font-bold">${h.symbol}</td><td class="${h.type==='BUY'?'text-green-500':'text-red-500'}">${h.type}</td><td class="mono">₹${h.total.toFixed(2)}</td></tr>`).join('')}
+            </table>`;
+        }
+
+        function closeOrderModal() {
+            document.getElementById('order-modal').classList.remove('active');
+            document.getElementById('modal-overlay').classList.add('hidden');
+        }
+
+        function switchTab(tab) {
+            ['market', 'portfolio', 'history'].forEach(t => {
+                document.getElementById(`view-${t}`).classList.add('hidden');
+                document.getElementById(`tab-${t}`).classList.remove('tab-active');
+            });
+            document.getElementById(`view-${tab}`).classList.remove('hidden');
+            document.getElementById(`tab-${tab}`).classList.add('tab-active');
+        }
+
+        window.onload = init;
+    </script>
+</body>
+</html>
+
